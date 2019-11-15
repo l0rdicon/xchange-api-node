@@ -7,8 +7,8 @@
  * ============================================================ */
 
 /**
- * Node Binance API
- * @module jaggedsoft/xchange-node-api
+ * Node Xchange API
+ * @module l0rdicon/xchange-node-api
  * @return {object} instance to class object
  */
 let api = function Xchange() {
@@ -38,27 +38,6 @@ let api = function Xchange() {
     };
     Xchange.options = default_options;
     Xchange.info = { timeOffset: 0 };
-
-    /**
-     * Replaces socks connection uri hostname with IP address
-     * @param {string} connString - socks connection string
-     * @return {string} modified string with ip address
-     */
-    const proxyReplacewithIp = function (connString) {
-        return connString;
-    }
-
-    /**
-     * Returns an array in the form of [host, port]
-     * @param {string} connString - connection string
-     * @return {array} array of host and port
-     */
-    const parseProxy = function (connString) {
-        let arr = connString.split('/');
-        let host = arr[2].split(':')[0];
-        let port = arr[2].split(':')[1];
-        return [arr[0], host, port];
-    }
 
     /**
      * Checks to see of the object is iterable
@@ -199,7 +178,6 @@ let api = function Xchange() {
             return a;
         }, []).join('&');
 
-        console.log("signed Request", query)
         let signature = crypto.createHmac('sha256', Xchange.options.APISECRET).update(query).digest('hex'); // set the HMAC hash header
         if (method === 'POST') {
             let opt = reqObjPOST(
@@ -223,17 +201,17 @@ let api = function Xchange() {
     /**
      * Create a signed http request to the signed API
      * @param {string} side - BUY or SELL
-     * @param {string} symbol - The symbol to buy or sell
+     * @param {string} market - The symbol to buy or sell
      * @param {string} quantity - The quantity to buy or sell
      * @param {string} price - The price per unit to transact each unit at
      * @param {object} flags - additional order settings
      * @param {function} callback - the callback function
      * @return {undefined}
      */
-    const order = function (side, symbol, quantity, price, flags = {}, callback = false) {
+    const order = function (side, market, quantity, price, flags = {}, callback = false) {
         let endpoint = 'v1/order';
         let opt = {
-            market: symbol,
+            market: market,
             side: side,
             type: 'limit',
             quantity: quantity
@@ -242,10 +220,6 @@ let api = function Xchange() {
         if (opt.type.includes('limit')) {
             opt.price = price;
         }
-        if (typeof flags.timeInForce !== 'undefined') opt.timeInForce = flags.timeInForce;
-        if (typeof flags.newOrderRespType !== 'undefined') opt.newOrderRespType = flags.newOrderRespType;
-
-        console.log("making order", opt, base, endpoint)
         signedRequest(base + endpoint, opt, function (error, response) {
             if (!response) {
                 if (callback) callback(error, response);
@@ -269,18 +243,18 @@ let api = function Xchange() {
     };
 
     /**
-     * Gets the price of a given symbol or symbols
-     * @param {array} data - array of symbols
-     * @return {array} - symbols with their current prices
+     * Gets the price of a given market or market
+     * @param {array} data - array of markets
+     * @return {array} - markets with their current prices
      */
     const priceData = function (data) {
         const prices = {};
         if (Array.isArray(data)) {
             for (let obj of data) {
-                prices[obj.symbol] = obj.price;
+                prices[obj.market] = obj.price;
             }
         } else { // Single price returned
-            prices[data.symbol] = data.price;
+            prices[data.market] = data.price;
         }
         return prices;
     };
@@ -293,7 +267,7 @@ let api = function Xchange() {
     const bookPriceData = function (data) {
         let prices = {};
         for (let obj of data) {
-            prices[obj.symbol] = {
+            prices[obj.market] = {
                 bid: obj.bidPrice,
                 bids: obj.bidQty,
                 ask: obj.askPrice,
@@ -323,22 +297,22 @@ let api = function Xchange() {
 
     /**
      * Used by web sockets depth and populates OHLC and info
-     * @param {string} symbol - symbol to get candlestick info
+     * @param {string} market - market to get candlestick info
      * @param {string} interval - time interval, 1m, 3m, 5m ....
      * @param {array} ticks - tick array
      * @return {undefined}
      */
-    const klineData = function (symbol, interval, ticks) { // Used for /depth
+    const klineData = function (market, interval, ticks) { // Used for /depth
         let last_time = 0;
         if (isIterable(ticks)) {
             for (let tick of ticks) {
                 // eslint-disable-next-line no-unused-vars
                 let [openTime, open, high, low, close, volume, closeTime, volume, count] = tick;
-                Xchange.ohlc[symbol][interval][openTime] = { open: open, high: high, low: low, close: close, volume: volume };
+                Xchange.ohlc[market][interval][openTime] = { open: open, high: high, low: low, close: close, volume: volume };
                 last_time = time;
             }
 
-            Xchange.info[symbol][interval].timestamp = last_time;
+            Xchange.info[market][interval].timestamp = last_time;
         }
     };
 
@@ -369,76 +343,48 @@ let api = function Xchange() {
      * @return {undefined}
      */
     const depthHandler = function (depth) {
-        let symbol = depth.s, obj;
-        let context = Xchange.depthCacheContext[symbol];
+        let market = depth.s, obj;
+        let context = Xchange.depthCacheContext[market];
 
         let updateDepthCache = function () {
             Xchange.depthCache[symbol].eventTime = depth.E;
             for (obj of depth.b) { //bids
                 if (obj[1] === '0.00000000') {
-                    delete Xchange.depthCache[symbol].bids[obj[0]];
+                    delete Xchange.depthCache[market].bids[obj[0]];
                 } else {
-                    Xchange.depthCache[symbol].bids[obj[0]] = parseFloat(obj[1]);
+                    Xchange.depthCache[market].bids[obj[0]] = parseFloat(obj[1]);
                 }
             }
             for (obj of depth.a) { //asks
                 if (obj[1] === '0.00000000') {
-                    delete Xchange.depthCache[symbol].asks[obj[0]];
+                    delete Xchange.depthCache[market].asks[obj[0]];
                 } else {
-                    Xchange.depthCache[symbol].asks[obj[0]] = parseFloat(obj[1]);
+                    Xchange.depthCache[market].asks[obj[0]] = parseFloat(obj[1]);
                 }
             }
             context.skipCount = 0;
             context.lastEventUpdateId = depth.u;
             context.lastEventUpdateTime = depth.E;
         };
-
-        // This now conforms 100% to the Xchange docs constraints on managing a local order book
-        if (context.lastEventUpdateId) {
-            const expectedUpdateId = context.lastEventUpdateId + 1;
-            if (depth.U <= expectedUpdateId) {
-                updateDepthCache();
-            } else {
-                let msg = 'depthHandler: [' + symbol + '] The depth cache is out of sync.';
-                msg += ' Symptom: Unexpected Update ID. Expected "' + expectedUpdateId + '", got "' + depth.U + '"';
-                if (Xchange.options.verbose) Xchange.options.log(msg);
-                throw new Error(msg);
-            }
-        } else if (depth.U > context.snapshotUpdateId + 1) {
-            /* In this case we have a gap between the data of the stream and the snapshot.
-               This is an out of sync error, and the connection must be torn down and reconnected. */
-            let msg = 'depthHandler: [' + symbol + '] The depth cache is out of sync.';
-            msg += ' Symptom: Gap between snapshot and first stream data.';
-            if (Xchange.options.verbose) Xchange.options.log(msg);
-            throw new Error(msg);
-        } else if (depth.u < context.snapshotUpdateId + 1) {
-            /* In this case we've received data that we've already had since the snapshot.
-               This isn't really an issue, and we can just update the cache again, or ignore it entirely. */
-
-            // do nothing
-        } else {
-            // This is our first legal update from the stream data
-            updateDepthCache();
-        }
     };
 
     /**
-     * Gets depth cache for given symbol
-     * @param {string} symbol - the symbol to fetch
+     * Gets depth cache for given market
+     * @param {string} market - the market to fetch
      * @return {object} - the depth cache object
      */
-    const getDepthCache = function (symbol) {
-        if (typeof Xchange.depthCache[symbol] === 'undefined') return { bids: {}, asks: {} };
-        return Xchange.depthCache[symbol];
+    const getDepthCache = function (market) {
+        if (typeof Xchange.depthCache[market] === 'undefined') return { bids: {}, asks: {} };
+        return Xchange.depthCache[market];
     };
 
     /**
      * Calculate Buy/Sell volume from DepthCache
-     * @param {string} symbol - the symbol to fetch
+     * @param {string} market - the symbol to fetch
      * @return {object} - the depth volume cache object
      */
-    const depthVolume = function (symbol) {
-        let cache = getDepthCache(symbol), quantity, price;
+    const depthVolume = function (market) {
+        let cache = getDepthCache(market), quantity, price;
         let bidbase = 0, askbase = 0, bidqty = 0, askqty = 0;
         for (price in cache.bids) {
             quantity = cache.bids[price];
@@ -453,35 +399,24 @@ let api = function Xchange() {
         return { bids: bidbase, asks: askbase, bidQty: bidqty, askQty: askqty };
     };
 
-    /**
-     * Checks whether or not an array contains any duplicate elements
-     *  Note(keith1024): at the moment this only works for primitive types,
-     *  will require modification to work with objects
-     * @param {array} array - the array to check
-     * @return {boolean} - true or false
-     */
-    const isArrayUnique = function (array) {
-        let s = new Set(array);
-        return s.size === array.length;
-    };
     return {
 
         /**
-        * Gets depth cache for given symbol
-        * @param {symbol} symbol - get depch cache for this symbol
+        * Gets depth cache for given market
+        * @param {symbol} market - get depch cache for this market
         * @return {object} - object
         */
-        depthCache: function (symbol) {
-            return getDepthCache(symbol);
+        depthCache: function (market) {
+            return getDepthCache(market);
         },
 
         /**
-        * Gets depth volume for given symbol
-        * @param {symbol} symbol - get depch volume for this symbol
+        * Gets depth volume for given market
+        * @param {market} market - get depch volume for this market
         * @return {object} - object
         */
-        depthVolume: function (symbol) {
-            return depthVolume(symbol);
+        depthVolume: function (market) {
+            return depthVolume(market);
         },
 
         /**
@@ -568,14 +503,14 @@ let api = function Xchange() {
 
         /**
         * Sorts bids
-        * @param {string} symbol - the object
+        * @param {string} market - the object
         * @param {int} max - the max number of bids
         * @param {string} baseValue - the object
         * @return {object} - the object
         */
-        sortBids: function (symbol, max = Infinity, baseValue = false) {
+        sortBids: function (market, max = Infinity, baseValue = false) {
             let object = {}, count = 0, cache;
-            if (typeof symbol === 'object') cache = symbol;
+            if (typeof market === 'object') cache = market;
             else cache = getDepthCache(symbol).bids;
             let sorted = Object.keys(cache).sort(function (a, b) {
                 return parseFloat(b) - parseFloat(a)
@@ -594,15 +529,15 @@ let api = function Xchange() {
 
         /**
         * Sorts asks
-        * @param {string} symbol - the object
+        * @param {string} symbmarketol - the object
         * @param {int} max - the max number of bids
         * @param {string} baseValue - the object
         * @return {object} - the object
         */
         sortAsks: function (symbol, max = Infinity, baseValue = false) {
             let object = {}, count = 0, cache;
-            if (typeof symbol === 'object') cache = symbol;
-            else cache = getDepthCache(symbol).asks;
+            if (typeof market === 'object') cache = market;
+            else cache = getDepthCache(market).asks;
             let sorted = Object.keys(cache).sort(function (a, b) {
                 return parseFloat(a) - parseFloat(b);
             });
@@ -729,174 +664,174 @@ let api = function Xchange() {
         /**
         * Creates an order
         * @param {string} side - BUY or SELL
-        * @param {string} symbol - the symbol to buy
+        * @param {string} market - the market to buy
         * @param {numeric} quantity - the quantity required
         * @param {numeric} price - the price to pay for each unit
         * @param {object} flags - aadditionalbuy order flags
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        order: function (side, symbol, quantity, price, flags = {}, callback = false) {
-            order(side, symbol, quantity, price, flags, callback);
+        order: function (side, market, quantity, price, flags = {}, callback = false) {
+            order(side, market, quantity, price, flags, callback);
         },
 
         /**
         * Creates a buy order
-        * @param {string} symbol - the symbol to buy
+        * @param {string} market - the market to buy
         * @param {numeric} quantity - the quantity required
         * @param {numeric} price - the price to pay for each unit
         * @param {object} flags - additional buy order flags
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        buy: function (symbol, quantity, price, flags = {}, callback = false) {
-            order('buy', symbol, quantity, price, flags, callback);
+        buy: function (market, quantity, price, flags = {}, callback = false) {
+            order('buy', market, quantity, price, flags, callback);
         },
 
         /**
         * Creates a sell order
-        * @param {string} symbol - the symbol to sell
+        * @param {string} market - the market to sell
         * @param {numeric} quantity - the quantity required
         * @param {numeric} price - the price to sell each unit for
         * @param {object} flags - additional order flags
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        sell: function (symbol, quantity, price, flags = {}, callback = false) {
-            order('sell', symbol, quantity, price, flags, callback);
+        sell: function (market, quantity, price, flags = {}, callback = false) {
+            order('sell', market, quantity, price, flags, callback);
         },
 
         /**
         * Creates a market buy order
-        * @param {string} symbol - the symbol to buy
+        * @param {string} market - the market to buy
         * @param {numeric} quantity - the quantity required
         * @param {object} flags - additional buy order flags
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        marketBuy: function (symbol, quantity, flags = { type: 'market' }, callback = false) {
+        marketBuy: function (market, quantity, flags = { type: 'market' }, callback = false) {
             if (typeof flags === 'function') { // Accept callback as third parameter
                 callback = flags;
                 flags = { type: 'market' };
             }
             if (typeof flags.type === 'undefined') flags.type = 'market';
-            order('buy', symbol, quantity, 0, flags, callback);
+            order('buy', market, quantity, 0, flags, callback);
         },
 
         /**
         * Creates a market sell order
-        * @param {string} symbol - the symbol to sell
+        * @param {string} market - the market to sell
         * @param {numeric} quantity - the quantity required
         * @param {object} flags - additional sell order flags
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        marketSell: function (symbol, quantity, flags = { type: 'market' }, callback = false) {
+        marketSell: function (market, quantity, flags = { type: 'market' }, callback = false) {
             if (typeof flags === 'function') { // Accept callback as third parameter
                 callback = flags;
                 flags = { type: 'market' };
             }
             if (typeof flags.type === 'undefined') flags.type = 'market';
-            order('sel', symbol, quantity, 0, flags, callback);
+            order('sell', market, quantity, 0, flags, callback);
         },
 
         /**
         * Cancels an order
-        * @param {string} symbol - the symbol to cancel
+        * @param {string} market - the market to cancel
         * @param {string} orderid - the orderid to cancel
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        cancel: function (symbol, orderid, callback = false) {
-            signedRequest(base + 'v1/order', { symbol: symbol, orderId: orderid }, function (error, data) {
-                if (callback) return callback.call(this, error, data, symbol);
+        cancel: function (market, orderid, callback = false) {
+            signedRequest(base + 'v1/order', { market: market, orderId: orderid }, function (error, data) {
+                if (callback) return callback.call(this, error, data, market);
             }, 'DELETE');
         },
 
         /**
         * Gets the status of an order
-        * @param {string} symbol - the symbol to check
+        * @param {string} market - the market to check
         * @param {string} orderid - the orderid to check
         * @param {function} callback - the callback function
         * @param {object} flags - any additional flags
         * @return {undefined}
         */
-        orderStatus: function (symbol, orderid, callback, flags = {}) {
-            let parameters = Object.assign({ symbol: symbol, orderId: orderid }, flags);
+        orderStatus: function (market, orderid, callback, flags = {}) {
+            let parameters = Object.assign({ market: market, orderId: orderid }, flags);
             signedRequest(base + 'v1/order', parameters, function (error, data) {
-                if (callback) return callback.call(this, error, data, symbol);
+                if (callback) return callback.call(this, error, data, market);
             });
         },
 
         /**
         * Gets open orders
-        * @param {string} symbol - the symbol to get
+        * @param {string} market - the market to get
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        openOrders: function (symbol, callback) {
-            let parameters = symbol ? { symbol: symbol } : {};
+        openOrders: function (market, callback) {
+            let parameters = market ? { market: market } : {};
             signedRequest(base + 'v1/openOrders', parameters, function (error, data) {
-                return callback.call(this, error, data, symbol);
+                return callback.call(this, error, data, market);
             });
         },
 
         /**
-        * Cancels all order of a given symbol
-        * @param {string} symbol - the symbol to cancel all orders for
+        * Cancels all order of a given market
+        * @param {string} market - the market to cancel all orders for
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        cancelOrders: function (symbol, callback = false) {
-            signedRequest(base + 'v1/openOrders', { symbol: symbol }, function (error, json) {
+        cancelOrders: function (market, callback = false) {
+            signedRequest(base + 'v1/openOrders', { market: market }, function (error, json) {
                 if (json.length === 0) {
-                    if (callback) return callback.call(this, 'No orders present for this symbol', {}, symbol);
+                    if (callback) return callback.call(this, 'No orders present for this market', {}, market);
                 }
                 for (let obj of json) {
                     let quantity = obj.origQty - obj.executedQty;
-                    Xchange.options.log('cancel order: ' + obj.side + ' ' + symbol + ' ' + quantity + ' @ ' + obj.price + ' #' + obj.orderId);
-                    signedRequest(base + 'v1/order', { symbol: symbol, orderId: obj.orderId }, function (error, data) {
-                        if (callback) return callback.call(this, error, data, symbol);
+                    Xchange.options.log('cancel order: ' + obj.side + ' ' + market + ' ' + quantity + ' @ ' + obj.price + ' #' + obj.orderId);
+                    signedRequest(base + 'v1/order', { market: market, orderId: obj.orderId }, function (error, data) {
+                        if (callback) return callback.call(this, error, data, market);
                     }, 'DELETE');
                 }
             });
         },
 
         /**
-        * Gets all order of a given symbol
-        * @param {string} symbol - the symbol
+        * Gets all order of a given market
+        * @param {string} market - the market
         * @param {function} callback - the callback function
         * @param {object} options - additional options
         * @return {undefined}
         */
-        allOrders: function (symbol, callback, options = {}) {
-            let parameters = Object.assign({ symbol: symbol }, options);
+        allOrders: function (market, callback, options = {}) {
+            let parameters = Object.assign({ market: market }, options);
             signedRequest(base + 'v1/allOrders', parameters, function (error, data) {
-                if (callback) return callback.call(this, error, data, symbol);
+                if (callback) return callback.call(this, error, data, market);
             });
         },
 
         /**
-        * Gets the depth information for a given symbol
-        * @param {string} symbol - the symbol
+        * Gets the depth information for a given market
+        * @param {string} market - the market
         * @param {function} callback - the callback function
         * @param {int} limit - limit the number of returned orders
         * @return {undefined}
         */
-        depth: function (symbol, callback, limit = 100) {
-            publicRequest(base + 'v1/depth', { symbol: symbol, limit: limit }, function (error, data) {
-                return callback.call(this, error, depthData(data), symbol);
+        depth: function (market, callback, limit = 100) {
+            publicRequest(base + 'v1/depth', { market: market, limit: limit }, function (error, data) {
+                return callback.call(this, error, depthData(data), market);
             });
         },
 
         /**
-        * Gets the prices of a given symbol(s)
-        * @param {string} symbol - the symbol
+        * Gets the prices of a given market(s)
+        * @param {string} market - the market
         * @param {function} callback - the callback function
         * @return {undefined}
         */
         prices: function (symbol, callback = false) {
-            const params = typeof symbol === 'string' ? '?symbol=' + symbol : '';
+            const params = typeof symbol === 'string' ? '?market=' + market : '';
             if (typeof symbol === 'function') callback = symbol; // backwards compatibility
 
             let opt = {
@@ -916,14 +851,14 @@ let api = function Xchange() {
         },
 
         /**
-        * Gets the book tickers of given symbol(s)
-        * @param {string} symbol - the symbol
+        * Gets the book tickers of given market(s)
+        * @param {string} market - the market
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        bookTickers: function (symbol, callback) {
-            const params = typeof symbol === 'string' ? '?symbol=' + symbol : '';
-            if (typeof symbol === 'function') callback = symbol; // backwards compatibility
+        bookTickers: function (market, callback) {
+            const params = typeof market === 'string' ? '?market=' + market : '';
+            if (typeof market === 'function') callback = market; // backwards compatibility
 
             let opt = {
                 url: base + 'v1/ticker/bookTicker' + params,
@@ -938,7 +873,7 @@ let api = function Xchange() {
                 if (response && response.statusCode !== 200) return callback(response);
 
                 if (callback) {
-                    const result = symbol ? JSON.parse(body) : bookPriceData(JSON.parse(body));
+                    const result = market ? JSON.parse(body) : bookPriceData(JSON.parse(body));
                     return callback(null, result);
                 }
             });
@@ -946,14 +881,14 @@ let api = function Xchange() {
 
         /**
         * Gets the prevday percentage change
-        * @param {string} symbol - the symbol or symbols
+        * @param {string} market - the market or market
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        prevDay: function (symbol, callback) {
-            let input = symbol ? { symbol: symbol } : {};
+        prevDay: function (market, callback) {
+            let input = market ? { market: market } : {};
             publicRequest(base + 'v1/ticker/24hr', input, function (error, data) {
-                if (callback) return callback.call(this, error, data, symbol);
+                if (callback) return callback.call(this, error, data, market);
             });
         },
 
@@ -968,7 +903,7 @@ let api = function Xchange() {
 
         /**
         * Withdraws asset to given wallet id
-        * @param {string} asset - the asset symbol
+        * @param {string} symbol - the asset symbol
         * @param {string} address - the wallet to transfer it to
         * @param {number} amount - the amount to transfer
         * @param {string} addressTag - and addtional address tag
@@ -976,11 +911,11 @@ let api = function Xchange() {
         * @param {string} name - the name to save the address as. Set falsy to prevent Binance saving to address book
         * @return {undefined}
         */
-        withdraw: function (asset, address, amount, addressTag = false, callback = false, name = 'API Withdraw') {
-            let params = { asset, address, amount };
+        withdraw: function (symbol, address, amount, addressTag = false, callback = false, name = 'API Withdraw') {
+            let params = { symbol, address, amount };
             if (addressTag) params.addressTag = addressTag;
             if (name) params.name = name
-            signedRequest(wapi + 'v1/withdraw', params, callback, 'POST', true);
+            signedRequest(base + 'v1/withdraw', params, callback, 'POST', true);
         },
 
         /**
@@ -989,9 +924,9 @@ let api = function Xchange() {
         * @param {object} params - supports limit and fromId parameters
         * @return {undefined}
         */
-        withdrawHistory: function (callback, params = {}) {
+        withdrawHistory: function (params, callback) {
             if (typeof params === 'string') params = { asset: params };
-            signedRequest(wapi + 'v1/withdrawHistory', params, callback);
+            signedRequest(base + 'v1/withdrawHistory', params, callback);
         },
 
         /**
@@ -1000,19 +935,20 @@ let api = function Xchange() {
         * @param {object} params - additional params
         * @return {undefined}
         */
-        depositHistory: function (callback, params = {}) {
-            if (typeof params === 'string') params = { asset: params }; // Support 'asset' (string) or optional parameters (object)
-            signedRequest(wapi + 'v1/depositHistory', params, callback);
+        depositHistory: function (params, callback) {
+            if (typeof params === 'string') params = { symbol: params }; // Support 'asset' (string) or optional parameters (object)
+            signedRequest(base + 'v1/depositHistory', params, callback);
         },
 
         /**
         * Get the deposit history for given asset
-        * @param {string} asset - the asset
+        * @param {string} symbol - the symbol
         * @param {function} callback - the callback function
         * @return {undefined}
         */
-        depositAddress: function (asset, callback) {
-            signedRequest(wapi + 'v1/depositAddress', { asset: asset }, callback);
+        depositAddress: function (symbol, callback) {
+            // signedRequest(base + 'v1/withdraw', params, callback, 'POST', true);
+            signedRequest(base + 'v1/deposit', { symbol: symbol }, callback);
         },
 
         /**
@@ -1036,16 +972,16 @@ let api = function Xchange() {
         },
 
         /**
-        * Get trades for a given symbol
-        * @param {string} symbol - the symbol
+        * Get trades for a given market
+        * @param {string} market - the market
         * @param {function} callback - the callback function
         * @param {object} options - additional options
         * @return {undefined}
         */
-        trades: function (symbol, callback, options = {}) {
-            let parameters = Object.assign({ symbol: symbol }, options);
+        trades: function (market, callback, options = {}) {
+            let parameters = Object.assign({ market: market }, options);
             signedRequest(base + 'v1/myTrades', parameters, function (error, data) {
-                if (callback) return callback.call(this, error, data, symbol);
+                if (callback) return callback.call(this, error, data, market);
             });
         },
 
@@ -1073,25 +1009,25 @@ let api = function Xchange() {
 
         /**
         * Get the recent trades
-        * @param {string} symbol - the symbol
+        * @param {string} market - the market
         * @param {function} callback - the callback function
         * @param {int} limit - limit the number of items returned
         * @return {undefined}
         */
-        recentTrades: function (symbol, callback, limit = 500) {
-            marketRequest(base + 'v1/trades', { symbol: symbol, limit: limit }, callback);
+        recentTrades: function (market, callback, limit = 500) {
+            marketRequest(base + 'v1/trades', { market: market, limit: limit }, callback);
         },
 
         /**
         * Get the historical trade info
-        * @param {string} symbol - the symbol
+        * @param {string} market - the market
         * @param {function} callback - the callback function
         * @param {int} limit - limit the number of items returned
         * @param {int} fromId - from this id
         * @return {undefined}
         */
-        historicalTrades: function (symbol, callback, limit = 500) {
-            let parameters = { symbol: symbol, limit: limit };
+        historicalTrades: function (market, callback, limit = 500) {
+            let parameters = { market: market, limit: limit };
             marketRequest(base + 'v1/historicalTrades', parameters, callback);
         },
 
@@ -1125,7 +1061,7 @@ let api = function Xchange() {
         */
         ohlc: function (chart) {
             let open = [], high = [], low = [], close = [], volume = [];
-            for (let timestamp in chart) { //Binance.ohlc[symbol][interval]
+            for (let timestamp in chart) { //Binance.ohlc[market][interval]
                 let obj = chart[timestamp];
                 open.push(parseFloat(obj.open));
                 high.push(parseFloat(obj.high));
@@ -1137,19 +1073,19 @@ let api = function Xchange() {
         },
 
         /**
-        * Gets the candles information for a given symbol
+        * Gets the candles information for a given market
         * intervals: 1m,3m,5m,15m,30m,1h,2h,4h,6h,8h,12h,1d,3d,1w,1M
-        * @param {string} symbol - the symbol
+        * @param {string} market - the market
         * @param {function} interval - the callback function
         * @param {function} callback - the callback function
         * @param {object} options - additional options
         * @return {undefined}
         */
-        candlesticks: function (symbol, interval = '5m', callback = false, options = { limit: 500 }) {
+        candlesticks: function (market, interval = '5m', callback = false, options = { limit: 500 }) {
             if (!callback) return;
-            let params = Object.assign({ symbol: symbol, interval: interval }, options);
+            let params = Object.assign({ market: market, interval: interval }, options);
             publicRequest(base + 'v1/klines', params, function (error, data) {
-                return callback.call(this, error, data, symbol);
+                return callback.call(this, error, data, market);
             });
         },
 
@@ -1179,12 +1115,12 @@ let api = function Xchange() {
         },
 
         /**
-        * Gets the market asset of given symbol
-        * @param {string} symbol - the public api endpoint
+        * Gets the base symbol of given market
+        * @param {string} market - the public api endpoint
         * @return {undefined}
         */
-        getMarket: function (symbol) {
-            const substring = symbol.substr(-3);
+        getMarket: function (market) {
+            const substring = market.substr(-4);
             if (substring === 'BTC') return 'BTC';
         }
     };
