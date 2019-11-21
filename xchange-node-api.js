@@ -738,12 +738,12 @@ let api = function Xchange() {
         /**
         * Cancels an order
         * @param {string} market - the market to cancel
-        * @param {string} orderid - the orderid to cancel
+        * @param {string} orderID - the orderid to cancel
         * @param {function} callback - the callback function
         * @return {undefined}
         */
         cancel: function (market, orderid, callback = false) {
-            signedRequest(base + 'v1/order', { market: market, orderId: orderid }, function (error, data) {
+            signedRequest(base + 'v1/order', { market: market, orderID: orderid }, function (error, data) {
                 if (callback) return callback.call(this, error, data, market);
             }, 'DELETE');
         },
@@ -757,7 +757,7 @@ let api = function Xchange() {
         * @return {undefined}
         */
         orderStatus: function (market, orderid, callback, flags = {}) {
-            let parameters = Object.assign({ market: market, orderId: orderid }, flags);
+            let parameters = Object.assign({ market: market, orderID: orderid }, flags);
             signedRequest(base + 'v1/order', parameters, function (error, data) {
                 if (callback) return callback.call(this, error, data, market);
             });
@@ -790,7 +790,7 @@ let api = function Xchange() {
                 for (let obj of json) {
                     let quantity = obj.origQty - obj.executedQty;
                     Xchange.options.log('cancel order: ' + obj.side + ' ' + market + ' ' + quantity + ' @ ' + obj.price + ' #' + obj.orderId);
-                    signedRequest(base + 'v1/order', { market: market, orderId: obj.orderId }, function (error, data) {
+                    signedRequest(base + 'v1/order', { market: market, orderID: obj.orderId }, function (error, data) {
                         if (callback) return callback.call(this, error, data, market);
                     }, 'DELETE');
                 }
