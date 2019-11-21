@@ -290,7 +290,7 @@ let api = function Xchange() {
             return {};
         }
         for (let obj of data.balances) {
-            balances[obj.asset] = { available: obj.free, onOrder: obj.locked };
+            balances[obj.asset] = { available: obj.free, locked: obj.locked, pending: obj.pending };
         }
         return balances;
     };
@@ -307,7 +307,7 @@ let api = function Xchange() {
         if (isIterable(ticks)) {
             for (let tick of ticks) {
                 // eslint-disable-next-line no-unused-vars
-                let [openTime, open, high, low, close, volume, closeTime, volume, count] = tick;
+                let [openTime, open, high, low, close, volume, closeTime, count] = tick;
                 Xchange.ohlc[market][interval][openTime] = { open: open, high: high, low: low, close: close, volume: volume };
                 last_time = time;
             }
@@ -921,7 +921,7 @@ let api = function Xchange() {
         /**
         * Get the Withdraws history for a given asset
         * @param {function} callback - the callback function
-        * @param {object} params - supports limit and fromId parameters
+        * @param {object} params - supports limit 
         * @return {undefined}
         */
         withdrawHistory: function (params, callback) {
@@ -1016,19 +1016,6 @@ let api = function Xchange() {
         */
         recentTrades: function (market, callback, limit = 500) {
             marketRequest(base + 'v1/trades', { market: market, limit: limit }, callback);
-        },
-
-        /**
-        * Get the historical trade info
-        * @param {string} market - the market
-        * @param {function} callback - the callback function
-        * @param {int} limit - limit the number of items returned
-        * @param {int} fromId - from this id
-        * @return {undefined}
-        */
-        historicalTrades: function (market, callback, limit = 500) {
-            let parameters = { market: market, limit: limit };
-            marketRequest(base + 'v1/historicalTrades', parameters, callback);
         },
 
         /**

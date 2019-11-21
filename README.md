@@ -583,20 +583,6 @@ set https_proxy=http://ip:port
 # run your app
 ```
 
-For web sockets currently only the socks method is functional at this time
-
-**linux**
-```bash
-export socks_proxy=socks://ip:port
-# run your app
-```
-
-**windows**
-```bash
-set socks_proxy=socks://ip:port
-# run your app
-```
-
 ### Troubleshooting
 Verify that your system time is correct. If you have any suggestions don't hesitate to file an issue.
 
@@ -620,7 +606,7 @@ xchange.useServerTime(function() {
 	xchange.balance((error, balances) => {
 		if ( error ) return console.error(error);
 		console.log("balances()", balances);
-		console.log("BNB balance: ", balances.BTC.free);
+		console.log("BTC balance: ", balances.BTC.avaliable);
 	});
 });
 ```
