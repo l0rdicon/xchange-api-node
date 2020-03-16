@@ -230,7 +230,7 @@ let api = function Xchange() {
                 Xchange.options.log('Order quantity too small. See exchangeInfo() for minimum amounts');
             }
             if (callback) callback(error, response);
-            else Xchange.options.log(side + '(' + symbol + ',' + quantity + ',' + price + ') ', response);
+            else Xchange.options.log(side + '(' + market + ',' + quantity + ',' + price + ') ', response);
         }, 'POST');
     };
 
@@ -286,11 +286,11 @@ let api = function Xchange() {
         let balances = {};
         if (typeof data === 'undefined') return {};
         if (typeof data.balances === 'undefined') {
-            Binance.options.log('balanceData error', data);
+            Xchange.options.log('balanceData error', data);
             return {};
         }
         for (let obj of data.balances) {
-            balances[obj.asset] = { available: obj.free, locked: obj.locked, pending: obj.pending };
+            balances[obj.asset] = { available: obj.free, onOrder: obj.locked };
         }
         return balances;
     };
@@ -307,7 +307,7 @@ let api = function Xchange() {
         if (isIterable(ticks)) {
             for (let tick of ticks) {
                 // eslint-disable-next-line no-unused-vars
-                let [openTime, open, high, low, close, volume, closeTime, count] = tick;
+                let [openTime, open, high, low, close, volume, closeTime, volume, count] = tick;
                 Xchange.ohlc[market][interval][openTime] = { open: open, high: high, low: low, close: close, volume: volume };
                 last_time = time;
             }
@@ -738,7 +738,7 @@ let api = function Xchange() {
         /**
         * Cancels an order
         * @param {string} market - the market to cancel
-        * @param {string} orderID - the orderid to cancel
+        * @param {string} orderid - the orderid to cancel
         * @param {function} callback - the callback function
         * @return {undefined}
         */
@@ -757,7 +757,7 @@ let api = function Xchange() {
         * @return {undefined}
         */
         orderStatus: function (market, orderid, callback, flags = {}) {
-            let parameters = Object.assign({ market: market, orderID: orderid }, flags);
+            let parameters = Object.assign({ market: market, orderId: orderid }, flags);
             signedRequest(base + 'v1/order', parameters, function (error, data) {
                 if (callback) return callback.call(this, error, data, market);
             });
@@ -784,13 +784,12 @@ let api = function Xchange() {
         */
         cancelOrders: function (market, callback = false) {
             signedRequest(base + 'v1/openOrders', { market: market }, function (error, json) {
-                if (json.length === 0) {
+                if (json.length === 0 || !json) {
                     if (callback) return callback.call(this, 'No orders present for this market', {}, market);
                 }
                 for (let obj of json) {
-                    let quantity = obj.origQty - obj.executedQty;
-                    Xchange.options.log('cancel order: ' + obj.side + ' ' + market + ' ' + quantity + ' @ ' + obj.price + ' #' + obj.orderId);
-                    signedRequest(base + 'v1/order', { market: market, orderID: obj.orderId }, function (error, data) {
+                    Xchange.options.log('cancel order: ' + obj.side + ' ' + market + ' ' + obj.remaining + ' @ ' + obj.price + ' ' + obj.order_id);
+                    signedRequest(base + 'v1/order', { market: market, orderID: obj.order_id }, function (error, data) {
                         if (callback) return callback.call(this, error, data, market);
                     }, 'DELETE');
                 }
@@ -908,7 +907,6 @@ let api = function Xchange() {
         * @param {number} amount - the amount to transfer
         * @param {string} addressTag - and addtional address tag
         * @param {function} callback - the callback function
-        * @param {string} name - the name to save the address as. Set falsy to prevent Binance saving to address book
         * @return {undefined}
         */
         withdraw: function (symbol, address, amount, addressTag = false, callback = false, name = 'API Withdraw') {
@@ -921,7 +919,7 @@ let api = function Xchange() {
         /**
         * Get the Withdraws history for a given asset
         * @param {function} callback - the callback function
-        * @param {object} params - supports limit 
+        * @param {object} params - supports limit and fromId parameters
         * @return {undefined}
         */
         withdrawHistory: function (params, callback) {
@@ -993,7 +991,6 @@ let api = function Xchange() {
         useServerTime: function (callback = false) {
             apiRequest(base + 'v1/time', {}, function (error, response) {
                 Xchange.info.timeOffset = response.serverTime - new Date().getTime();
-                //Binance.options.log("server time set: ", response.serverTime, Binance.info.timeOffset);
                 if (callback) callback();
             });
         },
@@ -1016,6 +1013,19 @@ let api = function Xchange() {
         */
         recentTrades: function (market, callback, limit = 500) {
             marketRequest(base + 'v1/trades', { market: market, limit: limit }, callback);
+        },
+
+        /**
+        * Get the historical trade info
+        * @param {string} market - the market
+        * @param {function} callback - the callback function
+        * @param {int} limit - limit the number of items returned
+        * @param {int} fromId - from this id
+        * @return {undefined}
+        */
+        historicalTrades: function (market, callback, limit = 500) {
+            let parameters = { market: market, limit: limit };
+            marketRequest(base + 'v1/historicalTrades', parameters, callback);
         },
 
         /**
@@ -1048,7 +1058,7 @@ let api = function Xchange() {
         */
         ohlc: function (chart) {
             let open = [], high = [], low = [], close = [], volume = [];
-            for (let timestamp in chart) { //Binance.ohlc[market][interval]
+            for (let timestamp in chart) {
                 let obj = chart[timestamp];
                 open.push(parseFloat(obj.open));
                 high.push(parseFloat(obj.high));
