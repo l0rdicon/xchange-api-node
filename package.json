@@ -1,7 +1,7 @@
 {
   "name": "xchange-node-api",
-  "version": "0.9.8",
-  "description": "Binance API for node https://github.com/l0rdicon/xchange-node-api",
+  "version": "0.9.9",
+  "description": "Xchange API for node https://github.com/l0rdicon/xchange-node-api",
   "main": "xchange-node-api.js",
   "dependencies": {
     "async": "^3.1.0",
