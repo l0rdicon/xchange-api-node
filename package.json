@@ -1,6 +1,6 @@
 {
   "name": "xchange-node-api",
-  "version": "0.9.9",
+  "version": "0.9.10",
   "description": "Xchange API for node https://github.com/l0rdicon/xchange-node-api",
   "main": "xchange-node-api.js",
   "dependencies": {

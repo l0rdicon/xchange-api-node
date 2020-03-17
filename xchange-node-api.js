@@ -323,15 +323,16 @@ let api = function Xchange() {
      */
     const depthData = function (data) {
         if (!data) return { bids: [], asks: [] };
-        let bids = {}, asks = {}, obj;
+        let bids = [], asks = []
+        let obj
         if (typeof data.bids !== 'undefined') {
             for (obj of data.bids) {
-                bids[obj[0]] = parseFloat(obj[1]);
+                bids.push({ price: obj.price, quantity: obj.quantity })
             }
         }
         if (typeof data.asks !== 'undefined') {
             for (obj of data.asks) {
-                asks[obj[0]] = parseFloat(obj[1]);
+                asks.push({ price: obj.price, quantity: obj.quantity })
             }
         }
         return { sequence: data.sequence, bids: bids, asks: asks };
@@ -784,7 +785,7 @@ let api = function Xchange() {
         */
         cancelOrders: function (market, callback = false) {
             signedRequest(base + 'v1/openOrders', { market: market }, function (error, json) {
-                if (json.length === 0 || !json) {
+                if (!json || json.length === 0) {
                     if (callback) return callback.call(this, 'No orders present for this market', {}, market);
                 }
                 for (let obj of json) {
@@ -803,7 +804,7 @@ let api = function Xchange() {
         * @param {object} options - additional options
         * @return {undefined}
         */
-        allOrders: function (market, callback, options = {}) {
+        allOrders: function (market, callback, options = { }) {
             let parameters = Object.assign({ market: market }, options);
             signedRequest(base + 'v1/allOrders', parameters, function (error, data) {
                 if (callback) return callback.call(this, error, data, market);
@@ -938,9 +939,23 @@ let api = function Xchange() {
             signedRequest(base + 'v1/depositHistory', params, callback);
         },
 
+
         /**
-        * Get the deposit history for given asset
-        * @param {string} symbol - the symbol
+        * Get a new deposit address for the given asset
+        * @param {string} asset - the symbol
+        * @param {function} callback - the callback function
+        * @return {undefined}
+        */
+
+        //const signedRequest = function (url, data = {}, callback, method = 'GET', noDataInSignature = false) {
+        newDepositAddress: function (symbol, callback) {
+            // signedRequest(base + 'v1/withdraw', params, callback, 'POST', true);
+            signedRequest(base + 'v1/deposit', { symbol: symbol }, callback, 'POST');
+        },
+
+        /**
+        * Get the deposit address for given asset
+        * @param {string} asset - the symbol
         * @param {function} callback - the callback function
         * @return {undefined}
         */
